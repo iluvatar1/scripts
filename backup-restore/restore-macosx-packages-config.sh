@@ -1,15 +1,12 @@
 PACKAGES=${PACKAGES:-1}
 CONFIG=${CONFIG:-1}
 
-if [ $PACKAGES ]; then
+if [ "0" != "$PACKAGES" ]; then
+    echo "Installing PACKAGES ..."
+    sleep 2
     # Homebrew taps
     TAPS=(
-	homebrew/dupes
-	homebrew/versions
 	homebrew/science
-	homebrew/x11
-	homebrew/fuse
-	homebrew/games
 	caskroom/cask
 	caskroom/fonts
 	caskroom/versions
@@ -19,24 +16,27 @@ if [ $PACKAGES ]; then
     # Install command line tools
     echo "Installing command line tools ... "
     xcode-select --install
-    echo "Done.\n"
+    echo "Done."
 
     echo "Configuring homebrew ..."
     # Check for Homebrew,
     # Install if we don't have it
-    if [ ! hash brew ]; then
+    if ! hash brew ; then
 	echo "Installing homebrew..."
 	ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+    else
+	echo "brew already installed."
     fi
-    brew update
+    echo "Updating homebrew ..."
+    brew update -v
+    echo "Done"
     for tap in ${TAPS[@]}; do
 	echo "Tapping : $tap"
 	brew tap $tap
     done
     #echo "to update setuptools & pip run: pip install --upgrade setuptools pip install --upgrade pip"
     echo "Don’t forget to add $(brew --prefix coreutils)/libexec/gnubin to \$PATH."
-    brew cleanup
-    echo "Done.\n"
+    echo "Done."
 
     echo "Installing brew packages ..."
     FNAME=BCK-brew_packages.txt
@@ -44,8 +44,7 @@ if [ $PACKAGES ]; then
 	echo $line | awk '{print $1}' | xargs brew install ;
     done < $FNAME
     brew linkapps
-    brew cleanup
-    echo "Done.\n"
+    echo "Done."
 
     echo "Installing brew cask packages (this might take a lot of time) ..."
     FNAME=BCK-brewcask_packages.txt
@@ -54,10 +53,9 @@ if [ $PACKAGES ]; then
 	echo $line | awk '{print $1}' | xargs brew cask install --appdir=/Applications ;
     done < $FNAME
     echo "Done."
-    brew cleanup
 
     ############## ANACONDA ###############
-    if [ ! hash conda ]; then
+    if ! hash conda ; then
 	PKG=https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
 	cd ~/Downloads
 	wget -c "${PKG}"
@@ -111,19 +109,21 @@ if [ $PACKAGES ]; then
 fi
 
 ########### configuration ############
-if [ $CONFIG ]; then
-    echo "Cloning dotfiles repo ..."
-    cd 
-    git clone https://github.com/iluvatar1/dotfiles.git 
-    echo "Done.\n"
-
+if [ "0" != "$CONFIG" ]; then
+    if [ -d "$HOME/dotfiles" ]; then
+	echo "Cloning dotfiles repo ..."
+	cd 
+	git clone https://github.com/iluvatar1/dotfiles.git 
+	echo "Done."
+    fi
+    
     echo "Using stow to link dot files ..."
     cd ~/dotfiles
-    if [ ! hash stow ]; then
+    if ! hash stow ; then
 	brew cask install stow
     fi
     stow common
-    echo "Done.\n"
+    echo "Done."
 
     echo "Restoring applications configurations with mackup"
     echo "Dropbox must be functioning to have the mackup repo ready ..."
