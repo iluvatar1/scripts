@@ -124,6 +124,7 @@ lzlib
 mackup
 make
 makedepend
+homebrew/science/matplotlib
 media-info
 mercurial
 mesalib-glw
