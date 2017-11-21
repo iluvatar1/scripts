@@ -6,6 +6,7 @@ DIRS=(~/Desktop/work
       ~/.ssh
       /etc
       /Library/LaunchDaemons
+      "~/Library/Application Support/Plex Media Server/"
      )
 
 TARGETBCKDIR="/Volumes/My Passport/BACKUP"
