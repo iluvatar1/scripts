@@ -10,7 +10,15 @@ echo "Backing up general configurations with mackup ..."
 mackup backup
 echo "Done."
 
-echo "It is assumed that you have backed up the dotfiles repo ..."
+echo "Backing up dotfiles ..."
+cd ~/dotfiles
+git push
+echo "Done."
+
+echo "Backing up scripts (with backup and restore stuff) ..."
+cd ~/scripts
+git push
+echo "Done."
 
 echo "Creating list of conda packages ..."
 conda list | awk '{print $1}' > BCK-conda_packages.txt
