@@ -7,6 +7,7 @@ DIRS=(~/Desktop/work
       /etc
       /Library/LaunchDaemons
       "~/Library/Application Support/Plex Media Server/"
+      ~/Library/Caches/Homebrew/
      )
 
 TARGETBCKDIR="/Volumes/My Passport/BACKUP"
