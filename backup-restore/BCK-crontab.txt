@@ -1,5 +1,0 @@
-#!/bin/sh
-PATH=/usr/local/bin:/usr/local/sbin:~/bin:/usr/bin:/bin:/usr/sbin:/sbin
-MAILTO=""
-
-* * * * * /Users/oquendo/Desktop/work/scripts/check_airport_network_macosx.sh
