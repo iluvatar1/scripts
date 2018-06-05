@@ -1,0 +1,8 @@
+#!/bin/sh
+PATH=/usr/local/bin:/usr/local/sbin:~/bin:/usr/bin:/bin:/usr/sbin:/sbin
+MAILTO=""
+
+#* * * * * /Users/oquendo/Desktop/work/scripts/check_airport_network_macosx.sh
+*/1 * * * * /Users/oquendo/Desktop/work/scripts/ssh/ssh_tunnel.sh &> /tmp/ssh_tunnel.status
+
+*/30 * * * * /usr/local/bin/reddit-background &>/dev/null
