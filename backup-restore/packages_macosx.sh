@@ -14,11 +14,8 @@ red_color
 echo "Install manually the following apps: iserial reader, Pasco Capstone, Pocket, beam, blackboard collaborate, popcorn time : https://popcorntime.sh/, tracker, scidavis, utorrent, Serial Seeker "
 reset_color
 
-homebrew_extra_pkgs &
-homebrew_cask_extra_pkgs &
-gem_pkgs
-perl_pkgs
-
-echo "DONE PACKAGES."
+blue_color
+echo "DONE PACKAGES. If you wish, install the extra packages by runnig packages_macosx-extra.sh "
+reset_color
 separator
 

@@ -18,7 +18,7 @@ function macosx_defaults () {
     # always show scrollbars
     defaults write NSGlobalDomain AppleShowScrollBars -string ‚ÄúAlways‚Äù
     # Set a blazingly fast keyboard repeat rate
-    defaults write NSGlobalDomain KeyRepeat -int 0
+    defaults write NSGlobalDomain KeyRepeat -int 1
     # Disable window animations
     defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
     # I don't even... (disabling auto-correct)

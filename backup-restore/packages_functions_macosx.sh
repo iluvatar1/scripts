@@ -88,7 +88,7 @@ function homebrew() {
     for pkgname in ${BREW_ESSENTIAL_PKGS[@]}; do
 	brew install $pkgname ;
     done
-    brew linkapps
+    # brew linkapps # This was deprecated by homebrew
     homebrew_setup_services
     
     BREW_CASK_ESSENTIAL_PKGS=(
@@ -123,7 +123,7 @@ function homebrew_extra_pkgs () {
     while read line; do
 	echo $line | awk '{print $1}' | xargs brew install >> homebrew_status.txt;
     done < $FNAME
-    brew linkapps
+    #brew linkapps  # This was deprecated by homebrew
     homebrew_setup_services
     echo "Done brew packages."
     separator
