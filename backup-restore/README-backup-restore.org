@@ -8,8 +8,10 @@ conda, etc), some app settings (using either a dotfiles repo or
 Mackup), and some Mac settings (using a shell script). This might be
 also used to setup a linux system
 
-* TODO This todo [0/1]
+* TODO This todo [0/3]
   - [ ] Configure tmux plugins
+  - [ ] Clone the dotfiles repo
+  - [ ] Clone the scripts repo?
 
 * Common utilities
   This setups some common functions to be used for both setup and
@@ -89,14 +91,16 @@ function link_dotfiles () {
   #+END_SRC
 
 * Backing up the system
+  There are two scripts to run, and they will store the packages names
+  on text files inside the BCK-files folder.
   - Backing up packages names and configs
     #+BEGIN_SRC sh :tangle backup-macosx-packages-config.sh
 echo "Creating list of brew packages ..."
-brew leaves > BCK-brew_packages.txt
+brew leaves > BCK-files/BCK-brew_packages.txt
 echo "Done."
 
 echo "Creating list of brew cask packages ..."
-brew cask list > BCK-brewcask_packages.txt
+brew cask list > BCK-files/BCK-brewcask_packages.txt
 echo "Done."
 
 echo "Backing up general configurations with mackup ..."
@@ -104,19 +108,19 @@ mackup backup
 echo "Done."
 
 echo "Creating list of conda packages ..."
-conda list | awk '{print $1}' > BCK-conda_packages.txt
+conda list | awk '{print $1}' > BCK-files/BCK-conda_packages.txt
 echo "Done."
 
 echo "Creating list of pip packages ..."
-pip list --format=legacy > BCK-pip_packages.txt
+pip list --format=columns \ awk '{print $1}' > BCK-files/BCK-pip_packages.txt
 echo "Done."
 
 echo "Creating list of gem packages ..."
-gem list > BCK-gem_packages.txt
+gem list > BCK-files/BCK-gem_packages.txt
 echo "Done."
 
 echo "Backing up crontab config ..."
-crontab -l > BCK-crontab.txt
+crontab -l > BCK-files/BCK-crontab.txt
 echo "Done."
 
 echo "Backing up dotfiles ..."
@@ -205,7 +209,7 @@ function anaconda_python() {
 }
 
 function anaconda_python_extra() {
-    CONDAFILE=BCK-conda_packages.txt
+    CONDAFILE=BCK-files/BCK-conda_packages.txt
     echo "Installing conda packages with anaconda conda from $CONDAFILE ..."
     rm -f conda-extra.txt
     while read line; do
@@ -213,7 +217,7 @@ function anaconda_python_extra() {
     done < $CONDAFILE
     echo "Done."
  
-    PIPFILE=BCK-pip_packages.txt
+    PIPFILE=BCK-files/BCK-pip_packages.txt
     rm -f pip-extra.txt
     echo "Installing pip packages with anaconda pip from $PIPFILE ..."
     while read line; do
@@ -370,7 +374,7 @@ function homebrew() {
 }
 
 function homebrew_extra_pkgs () {
-    FNAME=BCK-brew_packages.txt
+    FNAME=BCK-files/BCK-brew_packages.txt
     blue_color
     echo "Installing (in the background) homebrew EXTRA packages from $FNAME (this might take a lot of time) ..."
     reset_color
@@ -385,7 +389,7 @@ function homebrew_extra_pkgs () {
 }
 
 function homebrew_cask_extra_pkgs () {
-    FNAME=BCK-brewcask_packages.txt
+    FNAME=BCK-files/BCK-brewcask_packages.txt
     rm -f homebrecask_status.txt
     blue_color
     echo "Installing  (in the background) brew cask EXTRA packages from $FNAME (this might take a lot of time) ..."
@@ -400,7 +404,7 @@ function homebrew_cask_extra_pkgs () {
 
 function gem_pkgs {
     echo "Installing gem packages ..."
-    GEMFILE=BCK-gem_packages.txt
+    GEMFILE=BCK-files/BCK-gem_packages.txt
     while read line; do
 	echo $line | awk '{print $1}' | xargs sudo gem update  ;
     done < $GEMFILE
@@ -700,7 +704,7 @@ source config_functions_macosx.sh
 macosx_defaults
 link_dotfiles
 restore_mackup
-restore_crontab BCK-crontab.txt
+restore_crontab BCK-files/BCK-crontab.txt
 setup_login_items
 setup_sshguard
 
