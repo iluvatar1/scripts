@@ -1,0 +1,712 @@
+#+TITLE: Backing up and restoring a Mac Os X / Linux system 
+
+The goal of this doc is to setup some script that helps backing up and
+restoring a given mac os system. The goal is to decrease, as much as
+possible, the amount of work needed to start working on a fresh
+system. We will backup the installed apps (brew, brew cask, pip,
+conda, etc), some app settings (using either a dotfiles repo or
+Mackup), and some Mac settings (using a shell script). This might be
+also used to setup a linux system
+
+* TODO This todo [0/1]
+  - [ ] Configure tmux plugins
+
+* Common utilities
+  This setups some common functions to be used for both setup and
+  backup
+  #+BEGIN_SRC sh :tangle util_functions.sh
+# This is a helper file that defines many functions to be used
+# in other scripts
+
+# from : https://github.com/ghaiklor/iterm-fish-fisherman-osx/blob/master/install.sh
+RESET_COLOR="\033[0m"
+RED_COLOR="\033[0;31m"
+GREEN_COLOR="\033[0;32m"
+BLUE_COLOR="\033[0;34m"
+function reset_color() {
+    echo -e "${RESET_COLOR}\c"
+}
+function red_color() {
+    echo -e "${RED_COLOR}\c"
+}
+function green_color() {
+    echo -e "${GREEN_COLOR}\c"
+}
+function blue_color() {
+    echo -e "${BLUE_COLOR}\c"
+}
+function separator() {
+    green_color
+    echo "#=============================STEP FINISHED=============================#"
+    reset_color
+}
+  #+END_SRC
+
+  The following shows some common (MacOsX/Linux) config
+  #+BEGIN_SRC sh :tangle common_config.sh
+echo "Configuring git ..."
+git config --global user.email "woquendo@gmail.com"
+git config --global user.name "William Oquendo"
+  #+END_SRC
+
+  These are common config utility functions
+  #+BEGIN_SRC sh :tangle config_functions.sh
+source util_functions.sh
+
+function clone_dotfiles () {
+    OLDPWD=$(pwd -P)
+    if [ ! -d "$HOME/dotfiles" ]; then
+	echo "Cloning dotfiles repo ..."
+	cd 
+	git clone https://github.com/iluvatar1/dotfiles.git 
+	echo "Done."
+    else
+	cd $HOME/dotfiles
+	git pull
+    fi
+    cd $OLDPWD
+}
+
+function link_dotfiles () {
+    blue_color
+    echo "Linking dotfiles ..."
+    reset_color
+    OLDPWD=$(pwd -P)
+    clone_dotfiles
+    echo "Using stow to link dot files ..."
+    cd ~/dotfiles
+    if ! hash stow ; then
+	color_red
+	echo "Cannot use stow to link dotfiles"
+    else
+	stow common
+	echo "Done."    
+    fi
+    cd "$OLDPWD"
+}
+
+# TODO: configure tmux plugins
+  #+END_SRC
+
+* Backing up the system
+  - Backing up packages names and configs
+    #+BEGIN_SRC sh :tangle backup-macosx-packages-config.sh
+echo "Creating list of brew packages ..."
+brew leaves > BCK-brew_packages.txt
+echo "Done."
+
+echo "Creating list of brew cask packages ..."
+brew cask list > BCK-brewcask_packages.txt
+echo "Done."
+
+echo "Backing up general configurations with mackup ..."
+mackup backup
+echo "Done."
+
+echo "Creating list of conda packages ..."
+conda list | awk '{print $1}' > BCK-conda_packages.txt
+echo "Done."
+
+echo "Creating list of pip packages ..."
+pip list --format=legacy > BCK-pip_packages.txt
+echo "Done."
+
+echo "Creating list of gem packages ..."
+gem list > BCK-gem_packages.txt
+echo "Done."
+
+echo "Backing up crontab config ..."
+crontab -l > BCK-crontab.txt
+echo "Done."
+
+echo "Backing up dotfiles ..."
+cd ~/dotfiles
+git push
+echo "Done."
+
+# echo "Backing up scripts (with backup and restore stuff) ..."
+# cd ~/scripts
+# git push
+# echo "Done."
+
+echo "DO NOT FORGET TO EDIT AND RUN THE backup_directories.sh script."
+echo "DO NOT FORGET TO CHECK THE CPAN MODULES FROM instmodsh AND THE RESTORE SCRIPT"
+echo "DO NOT FORGET TO COPY YOUR ~/Library/Application Support/Plex Media Server/"    
+    #+END_SRC
+  - Backing up directories
+    #+BEGIN_SRC sh :tangle backup-macosx-directories.sh
+# In this file I specify some backup directories to be copied and verified
+DIRS=(~/Desktop/work
+      ~/Desktop/ScientificLibrary
+      ~/Music
+      ~/.gnupg
+      ~/.ssh
+      /etc
+      /Library/LaunchDaemons
+      "~/Library/Application Support/Plex Media Server/"
+      ~/Library/Caches/Homebrew/
+     )
+
+TARGETBCKDIR="/Volumes/My Passport/BACKUP"
+for a in ${DIRS[@]}; do
+    bname=$(basename $a)
+    echo "Copying : $a ..."
+    cp -u -av "$a" "$TARGETBCKDIR/" 1>LOGS/log-cp-$bname 2>LOGS/err-cp-$bname 
+    echo "Verifying copy with rsync ..."
+    rsync --delete -av -P "$a"/ "$TARGETBCKDIR/$bname/" 1> LOGS/log-rsync-$bname 2> LOGS/err-rsync-$bname
+    du -sh "$a"/ "$TARGETBCKDIR/$bname/"
+    echo "Done."
+done    
+    #+END_SRC
+
+* Restoring/configuring the system
+** Common package helpers
+   General functions for package installation
+   #+BEGIN_SRC sh :tangle packages_functions.sh
+source util_functions.sh
+
+# Utilities
+function anaconda_python() {
+    blue_color
+    echo "Installing miniconda and setting up python trhough anaconda and pip ..."
+    reset_color
+    ############## ANACONDA ###############
+    if ! hash conda ; then
+	PKG=https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
+	cd ~/Downloads
+	wget -c "${PKG}"
+	bash "${PKG}" -b 
+    fi
+
+    CONDA_ESSENTIAL=(
+	ipython
+	jupyter
+	jupyter-notebook
+	matplotlib
+	scipy
+	numpy
+	pip
+	)
+    echo "Installing essential conda packages with anaconda conda from ..."
+    for pkg in ${CONDA_ESSENTIAL[@]}; do 
+	${HOME}/miniconda3/bin/conda install -y ${pkg} 
+    done
+    echo "Done."
+
+    echo "Linking anaconda files to $HOME/local ..."
+    if [ ! -d "$HOME/local" ]; then
+	mkdir $HOME/local
+    fi
+    for fname in activate anaconda conda deactivate ipython ipython3 jupyter jupyter-notebook pip pip3 python python3; do
+	ln -sf ${HOME}/miniconda3/bin/$fname ${HOME}/local/bin
+    done
+    echo "Done anaconda and python stuff."
+    separator
+}
+
+function anaconda_python_extra() {
+    CONDAFILE=BCK-conda_packages.txt
+    echo "Installing conda packages with anaconda conda from $CONDAFILE ..."
+    rm -f conda-extra.txt
+    while read line; do
+	echo $line | awk '{print $1}' | xargs ${HOME}/miniconda3/bin/conda install -y  >> conda-extra.txt ;
+    done < $CONDAFILE
+    echo "Done."
+ 
+    PIPFILE=BCK-pip_packages.txt
+    rm -f pip-extra.txt
+    echo "Installing pip packages with anaconda pip from $PIPFILE ..."
+    while read line; do
+	echo $line | awk '{print $1}' | xargs ${HOME}/miniconda3/bin/pip install --upgrade >> pip-extra.txt ;
+    done < $PIPFILE
+    echo "Done."
+    separator
+}   
+   #+END_SRC
+** MacOsX
+   The main script, that follows, will install apps, configure them
+   (restoring the setups), so the system will be close to ready.
+   #+BEGIN_SRC sh :tangle 00-boostrap_macosx.sh
+# This script recreates a given config and packages onto a macosx system
+source util_functions.sh 
+
+# install packages
+blue_color
+echo "Installing base essential packages with homebrew "
+reset_color
+bash ./packages_macosx.sh
+separator
+
+# Configure system
+blue_color
+echo "Configuring the system ... "
+reset_color
+bash ./config_macosx.sh
+separator
+
+blue_color
+echo "Done."
+echo "If you wish, install extra packages running the script packages_macosx-extra.sh "
+reset_color
+separator   
+   #+END_SRC
+*** Packages
+   The following are the scripts called by the previous one
+   - Packages functions for Mac Os X
+     #+BEGIN_SRC sh :tangle packages_functions_macosx.sh
+# Speciific functions only for osx
+source util_functions.sh 
+source packages_functions.sh
+
+function xcode_command_line_tools() {
+    # Install command line tools
+    if ! [ $(xcode-select -p) ]; then
+	blue_color
+	echo "Installing command line tools ... "
+        xcode-select --install
+	echo "Done."
+    fi
+    reset_color
+    separator
+}
+
+function homebrew_setup_services () {
+    for a in /usr/local/opt/*/*.plist; do
+	ln -sfv $a  ~/Library/LaunchAgents/
+	launchctl load ~/Library/LaunchAgents/$(basename $a)
+    done
+}
+
+function homebrew() {
+    blue_color
+    echo "Installing and configuring homebrew"
+    reset_color
+    HOMEBREW_PREFIX="/usr/local"
+    if [ -d "$HOMEBREW_PREFIX" ]; then
+	if ! [ -r "$HOMEBREW_PREFIX" ]; then
+	    sudo chown -R "$LOGNAME:admin" /usr/local
+	fi
+    else
+	sudo mkdir "$HOMEBREW_PREFIX"
+	sudo chflags norestricted "$HOMEBREW_PREFIX"
+	sudo chown -R "$LOGNAME:admin" "$HOMEBREW_PREFIX"
+    fi
+    
+    # Homebrew taps
+    TAPS=(
+	# homebrew/science # deprecated as of 2017/12
+	homebrew/services
+	caskroom/cask
+	caskroom/fonts
+	caskroom/versions
+    )
+    echo "Configuring homebrew ..."
+    # Check for Homebrew,
+    # Install if we don't have it
+    if ! hash brew ; then
+	echo "Installing homebrew..."
+	ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+    else
+	echo "brew already installed."
+    fi
+    echo "Updating homebrew ..."
+    brew update -v
+    echo "Done"
+    for tap in ${TAPS[@]}; do
+	echo "Tapping : $tap"
+	brew tap $tap
+    done
+    #echo "to update setuptools & pip run: pip install --upgrade setuptools pip install --upgrade pip"
+    blue_color
+    echo "Don’t forget to add $(brew --prefix coreutils)/libexec/gnubin to \$PATH."
+    reset_color
+    echo "Done."
+
+    echo "Installing git"
+    brew install git
+    brew doctor
+
+    BREW_ESSENTIAL_PKGS=(
+	emacs
+	git
+	fail2ban
+	mackup
+	make
+	ntfs-3g
+	parallel
+	stow
+	tmux
+	bash-completion
+	ssh-copy-id
+    )
+    echo "Installing essential brew packages ..."
+    for pkgname in ${BREW_ESSENTIAL_PKGS[@]}; do
+	brew install $pkgname ;
+    done
+    # brew linkapps # This was deprecated by homebrew
+    homebrew_setup_services
+    
+    BREW_CASK_ESSENTIAL_PKGS=(
+	authoxy
+	dropbox
+	flux
+	iterm2
+	firefox
+	google-chrome
+	keepassxc
+	latexit
+	quicksilver
+	spectacle
+	vlc
+	xquartz
+    )
+    echo "Installing essential brew cask packages ..."
+    for pkgname in ${BREW_CASK_ESSENTIAL_PKGS[@]}; do
+	brew cask install --appdir=/Applications  $pkgname ;
+    done
+    
+    reset_color
+    separator
+}
+
+function homebrew_extra_pkgs () {
+    FNAME=BCK-brew_packages.txt
+    blue_color
+    echo "Installing (in the background) homebrew EXTRA packages from $FNAME (this might take a lot of time) ..."
+    reset_color
+    rm -f homebrew_status.txt
+    while read line; do
+	echo $line | awk '{print $1}' | xargs brew install >> homebrew_status.txt;
+    done < $FNAME
+    #brew linkapps  # This was deprecated by homebrew
+    homebrew_setup_services
+    echo "Done brew packages."
+    separator
+}
+
+function homebrew_cask_extra_pkgs () {
+    FNAME=BCK-brewcask_packages.txt
+    rm -f homebrecask_status.txt
+    blue_color
+    echo "Installing  (in the background) brew cask EXTRA packages from $FNAME (this might take a lot of time) ..."
+    reset_color
+    #brew install caskroom/cask/brew-cask
+    while read line; do
+	echo $line | awk '{print $1}' | xargs brew cask install --appdir=/Applications >> homebrewcask_status.txt;
+    done < $FNAME
+    echo "Done brew cask packages."
+    separator
+}
+
+function gem_pkgs {
+    echo "Installing gem packages ..."
+    GEMFILE=BCK-gem_packages.txt
+    while read line; do
+	echo $line | awk '{print $1}' | xargs sudo gem update  ;
+    done < $GEMFILE
+    echo "Done."
+    separator
+}
+
+function perl_pkgs () {
+    PERL_MODULES=(
+	Capture::Tiny
+	Clipboard
+	Crypt::Rijndael
+	File::KeePass
+	Mac::Pasteboard
+	Sort::Naturally
+	Term::ReadLine::Gnu
+	Term::ShellUI
+    )
+    echo "Installing cpan-perl modules ..."
+    for MOD in ${PERL_MODULES[@]}; do
+	sudo cpan ${MOD}
+    done
+    separator
+}     
+     #+END_SRC
+   - Install packages for mac os x:
+     #+BEGIN_SRC sh :tangle packages_macosx.sh
+source packages_functions_macosx.sh
+
+blue_color
+echo "Installing PACKAGES ..."
+sleep 2
+reset_color
+
+# Main processing
+xcode_command_line_tools
+homebrew
+anaconda_python
+# Extra packages
+red_color
+echo "Install manually the following apps: iserial reader, Pasco Capstone, Pocket, beam, blackboard collaborate, popcorn time : https://popcorntime.sh/, tracker, scidavis, utorrent, Serial Seeker "
+reset_color
+
+blue_color
+echo "DONE PACKAGES. If you wish, install the extra packages by runnig packages_macosx-extra.sh "
+reset_color
+separator     
+     #+END_SRC
+   - Install Extra packages for mac os x (takes a lot of time to download)
+     #+BEGIN_SRC sh :tangle packages_macosx_extra.sh
+source packages_functions_macosx.sh
+
+blue_color
+echo "Installing EXTRA PACKAGES ... this might take a lot of time ... "
+sleep 2
+reset_color
+
+# Main processing
+anaconda_python_extra &
+homebrew_extra_pkgs &
+homebrew_cask_extra_pkgs &
+gem_pkgs
+perl_pkgs
+
+echo "DONE EXTRA PACKAGES."
+separator     
+     #+END_SRC
+*** Config
+    These scripts configure the system (like desktops, hot cornes,
+    etc)
+    - Common utility functions
+      #+BEGIN_SRC sh :tangle config_functions_macosx.sh
+source config_functions.sh 
+
+function macosx_defaults () {
+    # Heavily inspired from : https://github.com/divio/osx-bootstrap/blob/master/core/defaults.sh
+    blue_color
+    echo "Configuring mac os x defaults ..."
+    reset_color
+
+    # This part from : https://github.com/adamisntdead/DevMyMac/blob/master/README.md
+    cpname="telperion-macbookpro"
+    sudo scutil --set ComputerName "$cpname"
+    sudo scutil --set HostName "$cpname"
+    sudo scutil --set LocalHostName "$cpname"
+    defaults write /Library/Preferences/SystemConfiguration/com.apple.smb.server NetBIOSName -string "$cpname"
+    chflags nohidden ~/Library
+    
+    # Enabling subpixel font rendering on non-Apple LCDs
+    defaults write NSGlobalDomain AppleFontSmoothing -int 2
+    # Enable full keyboard access for all controls
+    defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
+    ## Disable press-and-hold for keys in favor of key repeat
+    #defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
+    # Finder: show all filename extensions
+    defaults write NSGlobalDomain AppleShowAllExtensions -bool true
+    # Set a shorter Delay until key repeat
+    defaults write NSGlobalDomain InitialKeyRepeat -int 12
+    # always show scrollbars
+    defaults write NSGlobalDomain AppleShowScrollBars -string "Always"
+    # Set a blazingly fast keyboard repeat rate
+    defaults write NSGlobalDomain KeyRepeat -int 2
+    # Disable window animations
+    defaults write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool false
+    # I don't even... (disabling auto-correct)
+    defaults write NSGlobalDomain NSAutomaticSpellingCorrectionEnabled -bool false
+    # Disable automatic termination of inactive apps
+    defaults write NSGlobalDomain NSDisableAutomaticTermination -bool true
+    # Save to disk (not to iCloud) by default
+    defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool false
+    # Expanding the save panel by default
+    defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true
+    # Disable smooth scrolling
+    defaults write NSGlobalDomain NSScrollAnimationEnabled -bool false
+    ## Disable Resume system-wide
+    #defaults write NSGlobalDomain NSQuitAlwaysKeepsWindows -bool false
+    # Display ASCII control characters using caret notation in standard text views
+    defaults write NSGlobalDomain NSTextShowsControlCharacters -bool true
+    # Increasing the window resize speed for Cocoa applications whether you like it or not
+    defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
+    # Expand print panel by default
+    defaults write NSGlobalDomain PMPrintingExpandedStateForPrint -bool true
+    # Disable "natural" (Lion-style) scrolling
+    # defaults write NSGlobalDomain com.apple.swipescrolldirection -bool false
+
+    # FINDER
+    ## Show dotfiles in Finder
+    #defaults write com.apple.finder AppleShowAllFiles TRUE
+    # Setting Trash to empty securely not by default
+    defaults write com.apple.finder EmptyTrashSecurely -bool false
+    # Disable the warning when changing a file extension
+    defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false
+    # show litsview as default
+    defaults write com.apple.Finder FXPreferredViewStyle -string "Nlsv"
+    # When performing a search, search the current folder by default
+    defaults write com.apple.finder FXDefaultSearchScope -string "SCcf"
+    # Show absolute path in finder's title bar
+    defaults write com.apple.finder _FXShowPosixPathInTitle -bool YES
+    # Allow text selection in Quick Look/Preview
+    defaults write com.apple.finder QLEnableTextSelection -bool true
+    # Show Path bar in Finder
+    defaults write com.apple.finder ShowPathbar -bool true
+    # Show Status bar in Finder
+    defaults write com.apple.finder ShowStatusBar -bool true
+    # Avoiding creating stupid .DS_Store files on network volumes
+    defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
+    # Disable dashboard
+    defaults write com.apple.dashboard mcx-disabled -boolean YES
+    # Show the ~/Library folder
+    chflags nohidden ~/Library
+
+    # DESKTOP & DOCK
+    # Enable snap-to-grid for icons on the desktop and in other icon views
+    /usr/libexec/PlistBuddy -c "Set :DesktopViewSettings:IconViewSettings:arrangeBy grid" ~/Library/Preferences/com.apple.finder.plist
+    /usr/libexec/PlistBuddy -c "Set :StandardViewSettings:IconViewSettings:arrangeBy grid" ~/Library/Preferences/com.apple.finder.plist
+    # Set the icon size of Dock items to 36 pixels
+    defaults write com.apple.dock tilesize -int 36
+    # Speeding up Mission Control animations and grouping windows by application
+    defaults write com.apple.dock expose-animation-duration -float 0.1
+    defaults write com.apple.dock "expose-group-by-app" -bool true
+    # Enabling iTunes track notifications in the Dock
+    defaults write com.apple.dock itunes-notifications -bool true
+    # Show indicator lights for open applications in the Dock
+    defaults write com.apple.dock show-process-indicators -bool true
+    # Make Dock icons of hidden applications translucent
+    defaults write com.apple.dock showhidden -bool true
+    # Add a spacer to the left and right side of the Dock (where the applications are)
+    defaults write com.apple.dock persistent-apps -array-add '{tile-data={}; tile-type="spacer-tile";}'
+    defaults write com.apple.dock persistent-others -array-add '{tile-data={}; tile-type="spacer-tile";}'
+    # http://www.macprime.ch/tipps/article/optimierte-listen-ansicht-im-os-x-dock-aktivieren
+    defaults write com.apple.dock use-new-list-stack -bool TRUE
+    # Wipe all (default) app icons from the Dock
+    # defaults write com.apple.dock persistent-apps -array
+    # Reset Launchpad
+    find ~/Library/Application\ Support/Dock -name "*.db" -maxdepth 1 -delete
+
+    # SAFARI
+    # Disabling Safari‚Äôs thumbnail cache for History and Top Sites
+    defaults write com.apple.Safari DebugSnapshotsUpdatePolicy -int 2
+    defaults write com.apple.Safari IncludeInternalDebugMenu -bool true
+    # Removing useless icons from Safari‚Äôs bookmarks bar
+    defaults write com.apple.Safari ProxiesInBookmarksBar "()"
+    # Enabling the Develop menu and the Web Inspector in Safari
+    defaults write com.apple.Safari IncludeDevelopMenu -bool true
+    defaults write com.apple.Safari WebKitDeveloperExtrasEnabledPreferenceKey -bool true
+    defaults write com.apple.Safari "com.apple.Safari.ContentPageGroupIdentifier.WebKit2DeveloperExtrasEnabled" -bool true
+    # Adding a context menu item for showing the Web Inspector in web views
+    defaults write NSGlobalDomain WebKitDeveloperExtras -bool true
+
+    # TERMINAL
+    # Enabling UTF-8 ONLY in Terminal.app and setting the Pro theme by default
+    defaults write com.apple.Terminal StringEncodings -array 4
+    defaults write com.apple.Terminal ShellExitAction 2
+    defaults write com.apple.Terminal FontAntialias 1
+    defaults write com.apple.Terminal Shell "/bin/zsh"
+    defaults write com.apple.Terminal "Default Window Settings" "Pro"
+    defaults write com.apple.Terminal "Startup Window Settings" "Pro"
+
+    # TIME MACHINE
+    # Preventing Time Machine from prompting to use new hard drives as backup volume
+    defaults write com.apple.TimeMachine DoNotOfferNewDisksForBackup -bool true
+    # Disabling local Time Machine backups
+    hash tmutil &> /dev/null && sudo tmutil disablelocal
+
+    # SECURITY
+    # Requiring password immediately after sleep or screen saver begins
+    defaults write com.apple.screensaver askForPassword -int 1
+    defaults write com.apple.screensaver askForPasswordDelay -int 0
+    # Disable the ‚ÄúAre you sure you want to open this application?‚Äù dialog
+    defaults write com.apple.LaunchServices LSQuarantine -bool false
+
+    # OTHER
+    # Deleting space hogging sleep image and disabling
+    sudo rm /private/var/vm/sleepimage
+    sudo pmset -a hibernatemode 0
+    # Speed up wake from sleep to 24 hours from an hour
+    # http://www.cultofmac.com/221392/quick-hack-speeds-up-retina-macbooks-wake-from-sleep-os-x-tips/
+    sudo pmset -a standbydelay 86400
+    # Enable Assistive Devices 
+    sudo touch /private/var/db/.AccessibilityAPIEnabled
+    # Trackpad: enable tap to click for this user and for the login screen
+    defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
+    defaults -currentHost write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
+    defaults write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
+    # Increasing sound quality for Bluetooth headphones/headsets, because duhhhhh
+    defaults write com.apple.BluetoothAudioAgent "Apple Bitpool Min (editable)" -int 40
+    # disable guest user
+    sudo defaults write /Library/Preferences/com.apple.AppleFileServer guestAccess -bool false
+    sudo defaults write /Library/Preferences/SystemConfiguration/com.apple.smb.server AllowGuestAccess -bool false
+    # Enable AirDrop over Ethernet and on unsupported Macs running Lion
+    defaults write com.apple.NetworkBrowser BrowseAllInterfaces -bool true
+    # show remaining battery time
+    defaults write com.apple.menuextra.battery ShowPercent -string "YES"
+    # Automatically illuminate built-in MacBook keyboard in low light
+    defaults write com.apple.BezelServices kDim -bool true
+    # Turn off keyboard illumination when computer is not used for 5 minutes
+    defaults write com.apple.BezelServices kDimTime -int 300
+    # Disable the Ping sidebar in iTunes
+    defaults write com.apple.iTunes disablePingSidebar -bool true
+    defaults write com.apple.iTunes disablePing -bool true
+
+    separator
+}
+
+function restore_mackup () {
+    blue_color
+    echo "Restoring applications configurations with mackup"
+    echo "Dropbox must be functioning to have the mackup repo ready ..."
+    reset_color
+    sleep 3
+    mackup restore
+    echo "Done."
+
+    separator
+}
+
+function restore_crontab() {
+    blue_color
+    echo "Restoring crintab from $1 ..."
+    reset_color
+    crontab "$1"
+
+    separator
+}
+
+function setup_login_items(){
+    blue_color
+    echo "Setting up login items ... "
+    reset_color
+    for app in Quicksilver Flux Dash AppCleaner Spectacle; do 
+	echo "Adding app to loginitems: $app"
+	defaults write loginwindow AutoLaunchedApplicationDictionary -array-add '{ "Path" = "/Applications/'${app}'"; "Hide" = 0; }'
+    done
+
+    separator
+}
+
+function setup_sshguard () {
+    blue_color
+    #echo "Configuring sshguard ..."
+    echo "Running sshguard ..."
+    reset_color
+    if ! hash sshguard; then
+	brew install sshguard
+    fi
+    sudo pfctl -f /etc/pf.conf
+    sudo brew services restart sshguard
+
+    separator
+}
+      
+      #+END_SRC
+    - Config script
+      #+BEGIN_SRC sh :tangle config_macosx.sh
+source config_functions_macosx.sh
+
+macosx_defaults
+link_dotfiles
+restore_mackup
+restore_crontab BCK-crontab.txt
+setup_login_items
+setup_sshguard
+
+red_color
+echo "TODO: DO NOT FORGET TO COPY YOUR .gnupg CONFIG DIRECTORY FROM THE TRUSTED LOCATION"
+echo "TODO: DO NOT FORGET TO COPY YOUR .ssh CONFIG DIRECTORY FROM THE TRUSTED LOCATION"
+reset_color      
+      #+END_SRC
+** Linux
