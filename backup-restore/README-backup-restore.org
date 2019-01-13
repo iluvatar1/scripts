@@ -8,10 +8,12 @@ conda, etc), some app settings (using either a dotfiles repo or
 Mackup), and some Mac settings (using a shell script). This might be
 also used to setup a linux system
 
-* TODO This todo [0/3]
-  - [ ] Configure tmux plugins
-  - [ ] Clone the dotfiles repo
-  - [ ] Clone the scripts repo?
+* TODO This todo [5/5]
+  - [X] Configure tmux plugins
+  - [X] Clone the dotfiles repo
+  - [X] Clone the scripts repo?
+  - [X] Setup zotero
+  - [X] Check apps installed not by using brew cask and annotate
 
 * Common utilities
   This setups some common functions to be used for both setup and
@@ -112,7 +114,7 @@ conda list | awk '{print $1}' > BCK-files/BCK-conda_packages.txt
 echo "Done."
 
 echo "Creating list of pip packages ..."
-pip list --format=columns \ awk '{print $1}' > BCK-files/BCK-pip_packages.txt
+pip list --format=columns | awk '{print $1}' > BCK-files/BCK-pip_packages.txt
 echo "Done."
 
 echo "Creating list of gem packages ..."
@@ -140,24 +142,35 @@ echo "DO NOT FORGET TO COPY YOUR ~/Library/Application Support/Plex Media Server
   - Backing up directories
     #+BEGIN_SRC sh :tangle backup-macosx-directories.sh
 # In this file I specify some backup directories to be copied and verified
-DIRS=(~/Desktop/work
-      ~/Desktop/ScientificLibrary
-      ~/Music
-      ~/.gnupg
-      ~/.ssh
-      /etc
-      /Library/LaunchDaemons
-      "~/Library/Application Support/Plex Media Server/"
-      ~/Library/Caches/Homebrew/
+
+echo "This scripts uses rsync to backup several directories, but this is not really a mirror image. You are advised to use a better tool, like duplicity."
+
+DIRS=("$HOME/Desktop/work"
+      "$HOME/Desktop/ScientificLibrary"
+      "$HOME/Music"
+      "$HOME/.gnupg"
+      "$HOME/.ssh"
+      "/etc"
+      "/Library/LaunchDaemons"
+      "$HOME/Library/Application Support/Plex Media Server/"
+      "$HOME/Library/Caches/Homebrew/"
      )
 
-TARGETBCKDIR="/Volumes/My Passport/BACKUP"
+#TARGETBCKDIR="/Volumes/My Passport/BACKUP"
+TARGETBCKDIR="${1}"
+if [ ! -d "$TARGETBCKDIR" ]; then 
+    echo "Error: $TARGETBCKDIR does not exists . Exiting"
+    exit 1
+fi
+
 for a in ${DIRS[@]}; do
-    bname=$(basename $a)
+    bname=$(basename "$a")
+    mkdir LOGS &> /dev/null
+    echo 
     echo "Copying : $a ..."
     cp -u -av "$a" "$TARGETBCKDIR/" 1>LOGS/log-cp-$bname 2>LOGS/err-cp-$bname 
     echo "Verifying copy with rsync ..."
-    rsync --delete -av -P "$a"/ "$TARGETBCKDIR/$bname/" 1> LOGS/log-rsync-$bname 2> LOGS/err-rsync-$bname
+    rsync --delete -v -h -r -t -P "$a"/ "$TARGETBCKDIR/$bname/" 2> LOGS/err-rsync-"$bname" #1> LOGS/log-rsync-$bname 
     du -sh "$a"/ "$TARGETBCKDIR/$bname/"
     echo "Done."
 done    
@@ -445,7 +458,24 @@ homebrew
 anaconda_python
 # Extra packages
 red_color
-echo "Install manually the following apps: iserial reader, Pasco Capstone, Pocket, beam, blackboard collaborate, popcorn time : https://popcorntime.sh/, tracker, scidavis, utorrent, Serial Seeker "
+echo "Install manually the following apps: 
+    - audacity
+    - Pocket
+    - beam
+    - blackboard collaborate
+    - popcorn time : https://popcorntime.sh/
+    - tracker
+    - scidavis
+    - avidemux
+    - deezloader remix
+    - geogebra
+    - gmsh
+    - Mazda AIO TI
+    - OBS
+    - iserial reader 
+    - Pasco Capstone
+    - utorrent
+    - Serial Seeker "
 reset_color
 
 blue_color
@@ -481,9 +511,34 @@ source config_functions.sh
 
 function macosx_defaults () {
     # Heavily inspired from : https://github.com/divio/osx-bootstrap/blob/master/core/defaults.sh
+    # Some things taken from here
+    # https://github.com/mathiasbynens/dotfiles/blob/master/.osx
+
     blue_color
     echo "Configuring mac os x defaults ..."
     reset_color
+
+    # Set the colours you can use
+    black='\033[0;30m'
+    white='\033[0;37m'
+    red='\033[0;31m'
+    green='\033[0;32m'
+    yellow='\033[0;33m'
+    blue='\033[0;34m'
+    magenta='\033[0;35m'
+    cyan='\033[0;36m'
+
+    #  Reset text attributes to normal + without clearing screen.
+    alias Reset="tput sgr0"
+
+    # Color-echo.
+    # arg $1 = message
+    # arg $2 = Color
+    cecho() {
+    echo "${2}${1}"
+    Reset # Reset to normal.
+    return
+    }
 
     # This part from : https://github.com/adamisntdead/DevMyMac/blob/master/README.md
     cpname="telperion-macbookpro"
@@ -493,6 +548,76 @@ function macosx_defaults () {
     defaults write /Library/Preferences/SystemConfiguration/com.apple.smb.server NetBIOSName -string "$cpname"
     chflags nohidden ~/Library
     
+    echo ""
+    echo "Disabling OS X Gate Keeper"
+    echo "(You'll be able to install any app you want from here on, not just Mac App Store apps)"
+    sudo spctl --master-disable
+    sudo defaults write /var/db/SystemPolicy-prefs.plist enabled -string no
+    defaults write com.apple.LaunchServices LSQuarantine -bool false
+
+    echo ""
+    echo "Expanding the save panel by default"
+    defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true
+    defaults write NSGlobalDomain PMPrintingExpandedStateForPrint -bool true
+    defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true
+    
+    echo ""
+    echo "Automatically quit printer app once the print jobs complete"
+    defaults write com.apple.print.PrintingPrefs "Quit When Finished" -bool true
+    
+    # Try e.g. `cd /tmp; unidecode "\x{0000}" > cc.txt; open -e cc.txt`
+    echo ""
+    echo "Displaying ASCII control characters using caret notation in standard text views"
+    defaults write NSGlobalDomain NSTextShowsControlCharacters -bool true
+
+    echo ""
+    echo "Reveal IP address, hostname, OS version, etc. when clicking the clock in the login window"
+    sudo defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo HostName
+
+    echo ""
+    echo "Check for software updates daily, not just once per week"
+    defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
+    
+    echo ""
+    echo "Disable smart quotes and smart dashes as they're annoying when typing code"
+    defaults write NSGlobalDomain NSAutomaticQuoteSubstitutionEnabled -bool false
+    defaults write NSGlobalDomain NSAutomaticDashSubstitutionEnabled -bool false
+
+    echo ""
+    echo "Setting trackpad & mouse speed to a reasonable number"
+    defaults write -g com.apple.trackpad.scaling 2
+    defaults write -g com.apple.mouse.scaling 2.5
+
+    echo ""
+    echo "Where do you want screenshots to be stored? (~/Desktop as default)"
+    defaults write com.apple.screencapture location -string "$HOME/Desktop"
+    defaults write com.apple.screencapture type -string "png"
+
+    echo ""
+    echo "Enabling HiDPI display modes (requires restart)"
+    sudo defaults write /Library/Preferences/com.apple.windowserver DisplayResolutionEnabled -bool true
+
+    echo ""
+    echo "Showing icons for hard drives, servers, and removable media on the desktop"
+    defaults write com.apple.finder ShowExternalHardDrivesOnDesktop -bool true
+
+    echo ""
+    echo "Disabling disk image verification"
+    defaults write com.apple.frameworks.diskimages skip-verify -bool true
+    defaults write com.apple.frameworks.diskimages skip-verify-locked -bool true
+    defaults write com.apple.frameworks.diskimages skip-verify-remote -bool true
+
+    echo ""
+    echo "Setting Dock to auto-hide and removing the auto-hiding delay"
+    defaults write com.apple.dock autohide -bool true
+    defaults write com.apple.dock autohide-delay -float 0
+    defaults write com.apple.dock autohide-time-modifier -float 0
+
+    echo ""
+    echo "Disable annoying backswipe in Chrome"
+    defaults write com.google.Chrome AppleEnableSwipeNavigateWithScrolls -bool false
+
+    cecho "Executing many other setups ..." $green
     # Enabling subpixel font rendering on non-Apple LCDs
     defaults write NSGlobalDomain AppleFontSmoothing -int 2
     # Enable full keyboard access for all controls
@@ -537,12 +662,12 @@ function macosx_defaults () {
     defaults write com.apple.finder EmptyTrashSecurely -bool false
     # Disable the warning when changing a file extension
     defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false
-    # show litsview as default
+    # show litsview as default (use Clmv for columns)
     defaults write com.apple.Finder FXPreferredViewStyle -string "Nlsv"
     # When performing a search, search the current folder by default
     defaults write com.apple.finder FXDefaultSearchScope -string "SCcf"
     # Show absolute path in finder's title bar
-    defaults write com.apple.finder _FXShowPosixPathInTitle -bool YES
+    defaults write com.apple.finder _FXShowPosixPathInTitle -bool true
     # Allow text selection in Quick Look/Preview
     defaults write com.apple.finder QLEnableTextSelection -bool true
     # Show Path bar in Finder
@@ -560,6 +685,7 @@ function macosx_defaults () {
     # Enable snap-to-grid for icons on the desktop and in other icon views
     /usr/libexec/PlistBuddy -c "Set :DesktopViewSettings:IconViewSettings:arrangeBy grid" ~/Library/Preferences/com.apple.finder.plist
     /usr/libexec/PlistBuddy -c "Set :StandardViewSettings:IconViewSettings:arrangeBy grid" ~/Library/Preferences/com.apple.finder.plist
+    /usr/libexec/PlistBuddy -c "Set :FK_StandardViewSettings:IconViewSettings:arrangeBy grid" ~/Library/Preferences/com.apple.finder.plist
     # Set the icon size of Dock items to 36 pixels
     defaults write com.apple.dock tilesize -int 36
     # Speeding up Mission Control animations and grouping windows by application
@@ -618,8 +744,15 @@ function macosx_defaults () {
 
     # OTHER
     # Deleting space hogging sleep image and disabling
-    sudo rm /private/var/vm/sleepimage
-    sudo pmset -a hibernatemode 0
+    echo ""
+    echo "Remove the sleep image file to save disk space"
+    sudo rm /Private/var/vm/sleepimage
+    echo "creating a zero-byte file instead"
+    sudo touch /Private/var/vm/sleepimage
+    echo "and make sure it can't be rewritten"
+    sudo chflags uchg /Private/var/vm/sleepimage
+    #sudo pmset -a hibernatemode 0
+    
     # Speed up wake from sleep to 24 hours from an hour
     # http://www.cultofmac.com/221392/quick-hack-speeds-up-retina-macbooks-wake-from-sleep-os-x-tips/
     sudo pmset -a standbydelay 86400
@@ -714,3 +847,18 @@ echo "TODO: DO NOT FORGET TO COPY YOUR .ssh CONFIG DIRECTORY FROM THE TRUSTED LO
 reset_color      
       #+END_SRC
 ** Linux
+* Zotero
+  I already have an account, but the local config is as follows (to
+  avoid using online storage)
+  - Sync:
+    - Check sync automatically
+    - Check Sync full-text ...
+    - Uncheck everything under File Syncing
+  - Advanced, Files and Folders:
+    /Users/oquendo/Desktop/ScientificLibrary/Papers
+  - Install ZotFile
+    - Zotfile General Settings, Location of files, Custom Location ->
+      /Users/oquendo/Desktop/ScientificLibrary/Papers 
+      Subfolder defined as /%a/%y
+  - Install better bibtex
+    - Citation format : [auth:lower][year][shorttitle3_3] 
