@@ -180,65 +180,65 @@ done
 ** Common package helpers
    General functions for package installation
    #+BEGIN_SRC sh :tangle packages_functions.sh
-source util_functions.sh
+     source util_functions.sh
 
-# Utilities
-function anaconda_python() {
-    blue_color
-    echo "Installing miniconda and setting up python trhough anaconda and pip ..."
-    reset_color
-    ############## ANACONDA ###############
-    if ! hash conda ; then
-	PKG=https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
-	cd ~/Downloads
-	wget -c "${PKG}"
-	bash "${PKG}" -b 
-    fi
+     # Utilities
+     function anaconda_python() {
+	 blue_color
+	 echo "Installing miniconda and setting up python trhough anaconda and pip ..."
+	 reset_color
+	 ############## ANACONDA ###############
+	 if ! hash conda ; then
+	     PKG=Miniconda3-latest-MacOSX-x86_64.sh
+	     cd ~/Downloads
+	     wget -c "https://repo.continuum.io/miniconda/${PKG}"
+	     bash "${PKG}" -b 
+	 fi
 
-    CONDA_ESSENTIAL=(
-	ipython
-	jupyter
-	jupyter-notebook
-	matplotlib
-	scipy
-	numpy
-	pip
-	)
-    echo "Installing essential conda packages with anaconda conda from ..."
-    for pkg in ${CONDA_ESSENTIAL[@]}; do 
-	${HOME}/miniconda3/bin/conda install -y ${pkg} 
-    done
-    echo "Done."
+	 CONDA_ESSENTIAL=(
+	     ipython
+	     jupyter
+	     jupyter-notebook
+	     matplotlib
+	     scipy
+	     numpy
+	     pip
+	     )
+	 echo "Installing essential conda packages with anaconda conda from ..."
+	 for pkg in ${CONDA_ESSENTIAL[@]}; do 
+	     ${HOME}/miniconda3/bin/conda install -y ${pkg} 
+	 done
+	 echo "Done."
 
-    echo "Linking anaconda files to $HOME/local ..."
-    if [ ! -d "$HOME/local" ]; then
-	mkdir $HOME/local
-    fi
-    for fname in activate anaconda conda deactivate ipython ipython3 jupyter jupyter-notebook pip pip3 python python3; do
-	ln -sf ${HOME}/miniconda3/bin/$fname ${HOME}/local/bin
-    done
-    echo "Done anaconda and python stuff."
-    separator
-}
+	 echo "Linking anaconda files to $HOME/local ..."
+	 if [ ! -d "$HOME/local" ]; then
+	     mkdir $HOME/local
+	 fi
+	 for fname in activate anaconda conda deactivate ipython ipython3 jupyter jupyter-notebook pip pip3 python python3; do
+	     ln -sf ${HOME}/miniconda3/bin/$fname ${HOME}/local/bin
+	 done
+	 echo "Done anaconda and python stuff."
+	 separator
+     }
 
-function anaconda_python_extra() {
-    CONDAFILE=BCK-files/BCK-conda_packages.txt
-    echo "Installing conda packages with anaconda conda from $CONDAFILE ..."
-    rm -f conda-extra.txt
-    while read line; do
-	echo $line | awk '{print $1}' | xargs ${HOME}/miniconda3/bin/conda install -y  >> conda-extra.txt ;
-    done < $CONDAFILE
-    echo "Done."
+     function anaconda_python_extra() {
+	 CONDAFILE=BCK-files/BCK-conda_packages.txt
+	 echo "Installing conda packages with anaconda conda from $CONDAFILE ..."
+	 rm -f conda-extra.txt
+	 while read line; do
+	     echo $line | awk '{print $1}' | xargs ${HOME}/miniconda3/bin/conda install -y  >> conda-extra.txt ;
+	 done < $CONDAFILE
+	 echo "Done."
  
-    PIPFILE=BCK-files/BCK-pip_packages.txt
-    rm -f pip-extra.txt
-    echo "Installing pip packages with anaconda pip from $PIPFILE ..."
-    while read line; do
-	echo $line | awk '{print $1}' | xargs ${HOME}/miniconda3/bin/pip install --upgrade >> pip-extra.txt ;
-    done < $PIPFILE
-    echo "Done."
-    separator
-}   
+	 PIPFILE=BCK-files/BCK-pip_packages.txt
+	 rm -f pip-extra.txt
+	 echo "Installing pip packages with anaconda pip from $PIPFILE ..."
+	 while read line; do
+	     echo $line | awk '{print $1}' | xargs ${HOME}/miniconda3/bin/pip install --upgrade >> pip-extra.txt ;
+	 done < $PIPFILE
+	 echo "Done."
+	 separator
+     }   
    #+END_SRC
 ** MacOsX
    The main script, that follows, will install apps, configure them
@@ -270,7 +270,7 @@ separator
 *** Packages
    The following are the scripts called by the previous one
    - Packages functions for Mac Os X
-     #+BEGIN_SRC sh :tangle packages_functions_macosx.sh
+   #+BEGIN_SRC sh :tangle packages_functions_macosx.sh
 # Speciific functions only for osx
 source util_functions.sh 
 source packages_functions.sh
@@ -358,7 +358,7 @@ function homebrew() {
     )
     echo "Installing essential brew packages ..."
     for pkgname in ${BREW_ESSENTIAL_PKGS[@]}; do
-	brew install $pkgname ;
+	HOMEBREW_NO_AUTO_UPDATE=1 brew install $pkgname ;
     done
     # brew linkapps # This was deprecated by homebrew
     homebrew_setup_services
@@ -379,7 +379,7 @@ function homebrew() {
     )
     echo "Installing essential brew cask packages ..."
     for pkgname in ${BREW_CASK_ESSENTIAL_PKGS[@]}; do
-	brew cask install --appdir=/Applications  $pkgname ;
+	HOMEBREW_NO_AUTO_UPDATE=1 brew cask install --appdir=/Applications  $pkgname ;
     done
     
     reset_color
@@ -392,8 +392,9 @@ function homebrew_extra_pkgs () {
     echo "Installing (in the background) homebrew EXTRA packages from $FNAME (this might take a lot of time) ..."
     reset_color
     rm -f homebrew_status.txt
+    export HOMEBREW_NO_AUTO_UPDATE=1
     while read line; do
-	echo $line | awk '{print $1}' | xargs brew install >> homebrew_status.txt;
+	echo $line | awk '{print $1}' | xargs  brew install >> homebrew_status.txt;
     done < $FNAME
     #brew linkapps  # This was deprecated by homebrew
     homebrew_setup_services
@@ -407,6 +408,7 @@ function homebrew_cask_extra_pkgs () {
     blue_color
     echo "Installing  (in the background) brew cask EXTRA packages from $FNAME (this might take a lot of time) ..."
     reset_color
+    HOMEBREW_NO_AUTO_UPDATE=1
     #brew install caskroom/cask/brew-cask
     while read line; do
 	echo $line | awk '{print $1}' | xargs brew cask install --appdir=/Applications >> homebrewcask_status.txt;
@@ -465,13 +467,8 @@ echo "Install manually the following apps:
     - blackboard collaborate
     - popcorn time : https://popcorntime.sh/
     - tracker
-    - scidavis
-    - avidemux
     - deezloader remix
-    - geogebra
-    - gmsh
     - Mazda AIO TI
-    - OBS
     - iserial reader 
     - Pasco Capstone
     - utorrent
