@@ -852,10 +852,12 @@ reset_color
     - Check Sync full-text ...
     - Uncheck everything under File Syncing
   - Advanced, Files and Folders:
+    Linked attachment base directory: 
     /Users/oquendo/Desktop/ScientificLibrary/Papers
   - Install ZotFile
-    - Zotfile General Settings, Location of files, Custom Location ->
+    - Zotfile General Settings (tools, ZotFile preferences ), Location of files, Custom Location ->
       /Users/oquendo/Desktop/ScientificLibrary/Papers 
       Subfolder defined as /%a/%y
   - Install better bibtex
     - Citation format : [auth:lower][year][shorttitle3_3] 
+
